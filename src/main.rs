@@ -49,21 +49,35 @@ fn window_conf() -> Conf {
 async fn main() {
     // Define "No-Fly Zone" Polygons (Coordinates in pixels)
     let polygons: Vec<Vec<(f32, f32)>> = vec![
-        vec![(200.0, 100.0), (400.0, 150.0), (350.0, 300.0), (150.0, 250.0)],
-        vec![(500.0, 300.0), (700.0, 200.0), (750.0, 450.0), (550.0, 500.0)],
+        vec![(200.0, 75.0), (400.0, 50.0), (300.0, 200.0), (250.0, 200.0)],
+        vec![(500.0, 300.0), (700.0, 250.0), (750.0, 450.0), (550.0, 600.0)],
     ];
 
     let start_node = Pos(2, 2);
     let goal_node = Pos(37, 27);
 
     // Optional: Load your background image here
-    let background_tex = load_texture("world_map.png").await.unwrap();
+    //let background_tex = load_texture("world_map.png").await.unwrap();
+    let background_tex = load_texture("world_map.png").await.ok();
 
     loop {
         clear_background(Color::new(0.1, 0.1, 0.15, 1.0)); // Dark faded background
         
         // Optional: Draw the image
-        draw_texture(&background_tex, 0.0, 0.0, Color::new(1.0, 1.0, 1.0, 0.3));
+        //draw_texture(&background_tex, 0.0, 0.0, Color::new(1.0, 1.0, 1.0, 0.3));
+        // 1. Draw the background image stretched to the whole screen
+        if let Some(tex) = &background_tex {
+            draw_texture_ex(
+                tex,
+                0.0,
+                0.0,
+                Color::new(1.0, 1.0, 1.0, 0.3), // Faded overlay
+                DrawTextureParams {
+                    dest_size: Some(vec2(screen_width(), screen_height())),
+                    ..Default::default()
+                },
+            );
+        }
 
         // 1. Draw the network/grid points (faded in the background)
         for x in 0..GRID_WIDTH {
