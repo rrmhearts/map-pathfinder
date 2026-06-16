@@ -2,13 +2,9 @@
 
 A 2D pathfinding visualization application built in Rust. It generates a grid overlay on top of a customizable background image and calculates the most efficient route between a starting point and a destination using the A-star pathfinding algorithm. The application supports dynamic resolution, automatically scaling to fit fullscreen environments, and routes around user-defined polygonal obstacles representing restricted zones.
 
----
-
 ## Prerequisites
 
 To build and run this application, you will need Rust and Cargo installed on your system. The project relies on the Macroquad crate for graphics and the Pathfinding crate for algorithmic calculations.
-
----
 
 ## Installation and Execution
 
@@ -20,15 +16,11 @@ Execute the following command to compile and launch the application:
 
 > cargo run --release
 
----
-
 ### Usage and Controls
 
 The application can be launched in fullscreen mode (`fullscreen` branch), mapping the internal grid to your monitor's resolution. The start node is rendered in green, and the goal node is rendered in orange. The calculated path appears as a continuous red line circumventing the light blue polygon boundaries.
 
 In fullscreen mode, press the Escape key to close the application and return to your desktop safely.
-
----
 
 ### Technical Details
 
