@@ -1,10 +1,8 @@
 use macroquad::prelude::*;
 use pathfinding::prelude::astar;
 
-// Grid configuration
 const GRID_WIDTH: i32 = 40;
 const GRID_HEIGHT: i32 = 30;
-const CELL_SIZE: f32 = 20.0;
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct Pos(i32, i32);
@@ -25,8 +23,9 @@ fn is_point_in_polygon(x: f32, y: f32, polygon: &[(f32, f32)]) -> bool {
 }
 
 fn is_in_any_polygon(pos: &Pos, polygons: &[Vec<(f32, f32)>]) -> bool {
-    let px = pos.0 as f32 * CELL_SIZE;
-    let py = pos.1 as f32 * CELL_SIZE;
+    // We now check collisions purely using grid coordinates!
+    let px = pos.0 as f32;
+    let py = pos.1 as f32;
     
     for poly in polygons {
         if is_point_in_polygon(px, py, poly) {
@@ -36,73 +35,94 @@ fn is_in_any_polygon(pos: &Pos, polygons: &[Vec<(f32, f32)>]) -> bool {
     false
 }
 
+// Set fullscreen to true
 fn window_conf() -> Conf {
     Conf {
         window_title: "A* Pathfinding Map".to_owned(),
-        window_width: (GRID_WIDTH as f32 * CELL_SIZE) as i32,
-        window_height: (GRID_HEIGHT as f32 * CELL_SIZE) as i32,
+        fullscreen: true, 
         ..Default::default()
     }
 }
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    // Define "No-Fly Zone" Polygons (Coordinates in pixels)
+    // Polygons are now defined in Grid Coordinates (X: 0 to 40, Y: 0 to 30)
     let polygons: Vec<Vec<(f32, f32)>> = vec![
-        vec![(200.0, 100.0), (400.0, 150.0), (350.0, 300.0), (150.0, 250.0)],
-        vec![(500.0, 300.0), (700.0, 200.0), (750.0, 450.0), (550.0, 500.0)],
+        vec![(10.0, 5.0), (20.0, 7.5), (17.5, 15.0), (7.5, 12.5)],
+        vec![(25.0, 15.0), (35.0, 10.0), (37.5, 22.5), (27.5, 25.0)],
     ];
 
     let start_node = Pos(2, 2);
     let goal_node = Pos(37, 27);
 
-    // Optional: Load your background image here
-    let background_tex = load_texture("world_map.png").await.unwrap();
+    // Uncomment this once you have your image in the same folder as Cargo.toml
+    let background_tex = load_texture("world_map.png").await.ok();
 
     loop {
-        clear_background(Color::new(0.1, 0.1, 0.15, 1.0)); // Dark faded background
-        
-        // Optional: Draw the image
-        draw_texture(&background_tex, 0.0, 0.0, Color::new(1.0, 1.0, 1.0, 0.3));
+        // Exit if user presses ESC
+        if is_key_pressed(KeyCode::Escape) {
+            break;
+        }
 
-        // 1. Draw the network/grid points (faded in the background)
+        clear_background(Color::new(0.1, 0.1, 0.15, 1.0));
+
+        // Calculate dynamic cell sizes based on the current screen resolution
+        let cell_w = screen_width() / GRID_WIDTH as f32;
+        let cell_h = screen_height() / GRID_HEIGHT as f32;
+        
+        // 1. Draw the background image stretched to the whole screen
+        if let Some(tex) = &background_tex {
+            draw_texture_ex(
+                tex,
+                0.0,
+                0.0,
+                Color::new(1.0, 1.0, 1.0, 0.3), // Faded overlay
+                DrawTextureParams {
+                    dest_size: Some(vec2(screen_width(), screen_height())),
+                    ..Default::default()
+                },
+            );
+        }
+
+        // 2. Draw the network/grid points dynamically
         for x in 0..GRID_WIDTH {
             for y in 0..GRID_HEIGHT {
-                let px = x as f32 * CELL_SIZE;
-                let py = y as f32 * CELL_SIZE;
+                let px = x as f32 * cell_w;
+                let py = y as f32 * cell_h;
                 draw_circle(px, py, 2.0, Color::new(0.5, 0.5, 0.5, 0.5));
             }
         }
 
-        // 2. Draw the polygons (Light Blue)
+        // 3. Draw the polygons (Light Blue) mapped to screen space
         for poly in &polygons {
-            for i in 0..poly.len() {
-                let p1 = poly[i];
-                let p2 = poly[(i + 1) % poly.len()];
+            let mut scaled_poly = Vec::new();
+            for p in poly {
+                scaled_poly.push(vec2(p.0 * cell_w, p.1 * cell_h));
+            }
+
+            for i in 0..scaled_poly.len() {
+                let p1 = scaled_poly[i];
+                let p2 = scaled_poly[(i + 1) % scaled_poly.len()];
                 
-                // Draw edges
-                draw_line(p1.0, p1.1, p2.0, p2.1, 3.0, SKYBLUE);
-                // Highlight polygon vertices
-                draw_circle(p1.0, p1.1, 4.0, BLUE); 
+                draw_line(p1.x, p1.y, p2.x, p2.y, 3.0, SKYBLUE);
+                draw_circle(p1.x, p1.y, 4.0, BLUE); 
             }
             
-            // To fill them, we draw semi-transparent triangles from the first vertex
-            for i in 1..poly.len()-1 {
+            for i in 1..scaled_poly.len()-1 {
                 draw_triangle(
-                    vec2(poly[0].0, poly[0].1), 
-                    vec2(poly[i].0, poly[i].1), 
-                    vec2(poly[i+1].0, poly[i+1].1), 
-                    Color::new(0.68, 0.85, 0.9, 0.3) // Faded light blue fill
+                    scaled_poly[0], 
+                    scaled_poly[i], 
+                    scaled_poly[i+1], 
+                    Color::new(0.68, 0.85, 0.9, 0.3) 
                 );
             }
         }
 
-        // 3. Calculate A* Path
+        // 4. Calculate A* Path
         let result = astar(
             &start_node,
             |p| {
                 let mut successors = Vec::new();
-                // 8-way movement (straight and diagonal)
                 for dx in -1..=1 {
                     for dy in -1..=1 {
                         if dx == 0 && dy == 0 { continue; }
@@ -111,10 +131,8 @@ async fn main() {
                         let ny = p.1 + dy;
                         let next_pos = Pos(nx, ny);
 
-                        // Check bounds and collision
                         if nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT {
                             if !is_in_any_polygon(&next_pos, &polygons) {
-                                // Cost: 10 for straight, 14 for diagonal (approximation of sqrt(2)*10)
                                 let cost = if dx == 0 || dy == 0 { 10 } else { 14 };
                                 successors.push((next_pos, cost));
                             }
@@ -123,31 +141,28 @@ async fn main() {
                 }
                 successors
             },
-            |p| {
-                // Heuristic: Chebyshev distance * 10
-                ((p.0 - goal_node.0).abs().max((p.1 - goal_node.1).abs())) * 10
-            },
+            |p| ((p.0 - goal_node.0).abs().max((p.1 - goal_node.1).abs())) * 10,
             |p| *p == goal_node,
         );
 
-        // 4. Draw the Path (Red Lines)
+        // 5. Draw the Path
         if let Some((path, _cost)) = result {
             for i in 0..path.len() - 1 {
                 let p1 = &path[i];
                 let p2 = &path[i + 1];
                 
-                let x1 = p1.0 as f32 * CELL_SIZE;
-                let y1 = p1.1 as f32 * CELL_SIZE;
-                let x2 = p2.0 as f32 * CELL_SIZE;
-                let y2 = p2.1 as f32 * CELL_SIZE;
+                let x1 = p1.0 as f32 * cell_w;
+                let y1 = p1.1 as f32 * cell_h;
+                let x2 = p2.0 as f32 * cell_w;
+                let y2 = p2.1 as f32 * cell_h;
 
                 draw_line(x1, y1, x2, y2, 4.0, RED);
             }
         }
 
-        // 5. Draw Start and End Points
-        draw_circle(start_node.0 as f32 * CELL_SIZE, start_node.1 as f32 * CELL_SIZE, 6.0, GREEN);
-        draw_circle(goal_node.0 as f32 * CELL_SIZE, goal_node.1 as f32 * CELL_SIZE, 6.0, ORANGE);
+        // 6. Draw Start and End Points
+        draw_circle(start_node.0 as f32 * cell_w, start_node.1 as f32 * cell_h, 6.0, GREEN);
+        draw_circle(goal_node.0 as f32 * cell_w, goal_node.1 as f32 * cell_h, 6.0, ORANGE);
 
         next_frame().await
     }
